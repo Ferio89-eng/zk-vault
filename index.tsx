@@ -568,7 +568,7 @@ const App = () => {
         </div>
       </main>
 
-      <footer className="py-6 text-center text-xs text-slate-600 border-t border-slate-800/50 mt-auto">
+      <footer className="pt-6 pb-20 text-center text-xs text-slate-600 border-t border-slate-800/50 mt-auto">
         <div className="flex items-center justify-center gap-2">
           <Github className="w-3 h-3" />
           <span>Sincronizzato con GitHub • Zero-Knowledge • AES-256-GCM • Auto-Lock</span>
