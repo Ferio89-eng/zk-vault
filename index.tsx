@@ -517,13 +517,6 @@ const App = () => {
               <Lock className="w-4 h-4" />
               <span className="hidden sm:inline">Blocca</span>
             </button>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2 text-slate-400 hover:text-white transition-colors"
-              title="Disconnetti GitHub"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </header>
