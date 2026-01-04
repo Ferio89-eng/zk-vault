@@ -455,7 +455,12 @@ const App = () => {
   }
 
   if (status === 'locked') {
-    return <UnlockScreen onUnlock={handleUnlock} onBack={handleLogout} syncStatus={syncStatus} />;
+    return <UnlockScreen 
+      onUnlock={handleUnlock} 
+      onBack={handleLogout} 
+      syncStatus={syncStatus}
+      githubCreds={githubCredsRef.current}
+    />;
   }
 
   // UNLOCKED DASHBOARD
@@ -821,14 +826,16 @@ const SetupScreen = ({ onSetup, onBack }: { onSetup: (pw: string) => Promise<voi
   );
 };
 
-const UnlockScreen = ({ onUnlock, onBack, syncStatus }: { 
+const UnlockScreen = ({ onUnlock, onBack, syncStatus, githubCreds }: { 
   onUnlock: (pw: string) => Promise<void>, 
   onBack: () => void,
-  syncStatus: 'idle' | 'syncing' | 'error'
+  syncStatus: 'idle' | 'syncing' | 'error',
+  githubCreds: GitHubCredentials | null
 }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   
   const [attempts, setAttempts] = useState(0);
   const [lockoutTime, setLockoutTime] = useState(0);
@@ -923,12 +930,29 @@ const UnlockScreen = ({ onUnlock, onBack, syncStatus }: {
           </button>
         </form>
         
-        <div className="mt-6 text-center">
-          <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-300">
+        <div className="mt-6 text-center space-y-2">
+          <button 
+            onClick={() => setShowChangePassword(true)} 
+            className="text-sm text-emerald-500 hover:text-emerald-400 block mx-auto"
+          >
+            Cambia Password
+          </button>
+          <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-300 block mx-auto">
             ← Cambia Vault
           </button>
         </div>
       </div>
+
+      {showChangePassword && githubCreds && (
+        <ChangePasswordModal 
+          githubCreds={githubCreds}
+          onClose={() => setShowChangePassword(false)}
+          onSuccess={() => {
+            setShowChangePassword(false);
+            alert("Password cambiata con successo! Usa la nuova password per sbloccare.");
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1216,6 +1240,173 @@ const PasswordGeneratorModal = ({ onClose }: { onClose: () => void }) => {
         >
           <RefreshCw className="w-4 h-4" /> Rigenera
         </button>
+      </div>
+    </div>
+  );
+};
+
+const ChangePasswordModal = ({ githubCreds, onClose, onSuccess }: {
+  githubCreds: GitHubCredentials,
+  onClose: () => void,
+  onSuccess: () => void
+}) => {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPasswords, setShowPasswords] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    // Validazioni
+    if (newPassword.length < 8) {
+      setError("La nuova password deve essere di almeno 8 caratteri.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Le nuove password non coincidono.");
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setError("La nuova password deve essere diversa da quella attuale.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1. Scarica il vault attuale da GitHub
+      const file = await githubGetFile(githubCreds);
+      if (!file) {
+        throw new Error("Vault non trovato su GitHub.");
+      }
+
+      const stored: VaultStorage = JSON.parse(file.content);
+      const currentSalt = new Uint8Array(base64ToBuffer(stored.salt));
+
+      // 2. Verifica la password attuale
+      const currentKey = await deriveKey(currentPassword, currentSalt);
+      let entries: VaultEntry[];
+      try {
+        entries = await decryptData(currentKey, stored.iv, stored.ciphertext);
+      } catch {
+        throw new Error("Password attuale errata.");
+      }
+
+      // 3. Genera nuovo salt e deriva nuova chiave
+      const newSalt = generateSalt();
+      const newKey = await deriveKey(newPassword, newSalt);
+
+      // 4. Re-cifra i dati con la nuova chiave
+      const encrypted = await encryptData(newKey, entries);
+
+      const newStorage: VaultStorage = {
+        salt: bufferToBase64(newSalt.buffer),
+        iv: encrypted.iv,
+        ciphertext: encrypted.ciphertext
+      };
+
+      // 5. Salva su GitHub
+      await githubSaveFile(
+        githubCreds,
+        JSON.stringify(newStorage, null, 2),
+        file.sha,
+        'Change master password'
+      );
+
+      onSuccess();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Errore durante il cambio password.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-800 w-full max-w-md rounded-2xl shadow-2xl border border-slate-700 p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Key className="w-5 h-5 text-emerald-400" /> Cambia Password
+          </h2>
+          <button onClick={onClose} disabled={loading}>
+            <X className="w-6 h-6 text-slate-400 hover:text-white"/>
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg flex items-center gap-3 text-rose-200 text-sm">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">Password Attuale</label>
+            <input 
+              type={showPasswords ? 'text' : 'password'}
+              required
+              disabled={loading}
+              className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-white"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">Nuova Password</label>
+            <input 
+              type={showPasswords ? 'text' : 'password'}
+              required
+              disabled={loading}
+              className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-white"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="Minimo 8 caratteri"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">Conferma Nuova Password</label>
+            <input 
+              type={showPasswords ? 'text' : 'password'}
+              required
+              disabled={loading}
+              className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-white"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="Ripeti la nuova password"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={showPasswords}
+              onChange={e => setShowPasswords(e.target.checked)}
+              className="rounded border-slate-600 bg-slate-700 text-emerald-500"
+            />
+            Mostra password
+          </label>
+
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition-all disabled:opacity-50 flex justify-center items-center gap-2 mt-6"
+          >
+            {loading ? (
+              <><RefreshCw className="w-4 h-4 animate-spin" /> Cambio in corso...</>
+            ) : (
+              'Cambia Password'
+            )}
+          </button>
+        </form>
       </div>
     </div>
   );
