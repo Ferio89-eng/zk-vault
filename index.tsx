@@ -933,7 +933,7 @@ const UnlockScreen = ({ onUnlock, onBack, syncStatus, githubCreds }: {
         <div className="mt-6 text-center space-y-2">
           <button 
             onClick={() => setShowChangePassword(true)} 
-            className="text-sm text-emerald-500 hover:text-emerald-400 block mx-auto"
+            className="text-sm text-slate-500 hover:text-slate-300 block mx-auto"
           >
             Cambia Password
           </button>
