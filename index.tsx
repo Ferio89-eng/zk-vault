@@ -952,17 +952,20 @@ const UnlockScreen = ({ onUnlock, onBack, syncStatus, githubCreds }: {
 
 const CredentialCard: React.FC<{ entry: VaultEntry, onEdit: () => void, onDelete: () => void }> = ({ entry, onEdit, onDelete }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const [copied, setCopied] = useState<'user' | 'pass' | null>(null);
+  const [copied, setCopied] = useState<'user' | 'pass' | 'url' | null>(null);
 
-  const copyToClipboard = (text: string, type: 'user' | 'pass') => {
+  const copyToClipboard = (text: string, type: 'user' | 'pass' | 'url') => {
     navigator.clipboard.writeText(text);
     setCopied(type);
     
     setTimeout(() => setCopied(null), 2000);
 
-    setTimeout(() => {
-      navigator.clipboard.writeText('');
-    }, CLIPBOARD_CLEAR_TIMEOUT);
+    // Non pulire la clipboard per URL (l'utente potrebbe volerlo incollare nel browser)
+    if (type !== 'url') {
+      setTimeout(() => {
+        navigator.clipboard.writeText('');
+      }, CLIPBOARD_CLEAR_TIMEOUT);
+    }
   };
 
   return (
@@ -976,20 +979,19 @@ const CredentialCard: React.FC<{ entry: VaultEntry, onEdit: () => void, onDelete
              <div>
                <h3 className="font-bold text-white leading-tight">{entry.title}</h3>
                {entry.url && (
-                 <button 
-                   type="button"
-                   onClick={() => {
-                     // Force open in external browser (works better on PWA/mobile)
-                     const newWindow = window.open(entry.url, '_blank', 'noopener,noreferrer');
-                     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                       // Fallback: try location change
-                       window.location.href = entry.url;
-                     }
-                   }}
-                   className="text-xs text-blue-400 hover:underline flex items-center gap-1 mt-0.5"
-                 >
-                   {new URL(entry.url).hostname} <ExternalLink className="w-2.5 h-2.5" />
-                 </button>
+                 <div className="flex items-center gap-2 mt-0.5">
+                   <a href={entry.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                     {new URL(entry.url).hostname} <ExternalLink className="w-2.5 h-2.5" />
+                   </a>
+                   <button
+                     type="button"
+                     onClick={() => copyToClipboard(entry.url, 'url')}
+                     className="text-slate-500 hover:text-white transition-colors"
+                     title="Copia URL"
+                   >
+                     {copied === 'url' ? <span className="text-xs text-emerald-500">✓</span> : <Copy className="w-3 h-3" />}
+                   </button>
+                 </div>
                )}
              </div>
           </div>
