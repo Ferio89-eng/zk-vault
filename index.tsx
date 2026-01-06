@@ -976,9 +976,20 @@ const CredentialCard: React.FC<{ entry: VaultEntry, onEdit: () => void, onDelete
              <div>
                <h3 className="font-bold text-white leading-tight">{entry.title}</h3>
                {entry.url && (
-                 <a href={entry.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline flex items-center gap-1 mt-0.5">
+                 <button 
+                   type="button"
+                   onClick={() => {
+                     // Force open in external browser (works better on PWA/mobile)
+                     const newWindow = window.open(entry.url, '_blank', 'noopener,noreferrer');
+                     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                       // Fallback: try location change
+                       window.location.href = entry.url;
+                     }
+                   }}
+                   className="text-xs text-blue-400 hover:underline flex items-center gap-1 mt-0.5"
+                 >
                    {new URL(entry.url).hostname} <ExternalLink className="w-2.5 h-2.5" />
-                 </a>
+                 </button>
                )}
              </div>
           </div>
